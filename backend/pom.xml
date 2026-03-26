@@ -19,6 +19,12 @@
         <artifactId>zookeeper</artifactId>
         <version>3.9.2</version>
     </dependency>
+     <!-- SLF4J for logging (ZooKeeper uses this) -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.9</version>
+        </dependency>
   </dependencies>
   <build>
     <plugins>

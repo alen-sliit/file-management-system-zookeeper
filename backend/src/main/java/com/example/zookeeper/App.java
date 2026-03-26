@@ -1,5 +1,6 @@
 package com.example.zookeeper;
 
+import com.example.zookeeper.cluster.ClusterMembershipManager;
 import com.example.zookeeper.election.LeaderElection;
 import com.example.zookeeper.zookeeper.ZooKeeperConsensusManager;
 import org.apache.zookeeper.ZooKeeper;
@@ -29,6 +30,9 @@ public class App implements Watcher {
 
         // Consensus manager demo
         runConsensusDemo();
+
+        // Cluster membership demo
+        runClusterDemo();
     }
 
     public void connect() throws IOException {
@@ -140,6 +144,33 @@ public class App implements Watcher {
             System.out.println("ZooKeeper consensus demo completed successfully.");
         } finally {
             consensus.close();
+        }
+    }
+
+    private static void runClusterDemo() throws Exception {
+        System.out.println("Starting ZooKeeper cluster demo...");
+
+        ClusterMembershipManager cluster = new ClusterMembershipManager(ZK_SERVER, 3000);
+        String nodeId = System.getenv().getOrDefault("NODE_ID", "node-demo");
+
+        try {
+            cluster.connect();
+            String registeredPath = cluster.registerNode(nodeId, "localhost", 8080, "ACTIVE");
+            System.out.println("Cluster node registered at: " + registeredPath);
+
+            cluster.markNodeState(nodeId, "HEALTHY");
+            String leader = cluster.getLeader();
+            System.out.println("Cluster leader: " + (leader.isEmpty() ? "<none>" : leader));
+
+            List<ClusterMembershipManager.NodeInfo> nodes = cluster.getNodes();
+            System.out.println("Cluster nodes count: " + nodes.size());
+            for (ClusterMembershipManager.NodeInfo node : nodes) {
+                System.out.println("- " + node.nodeId + " @ " + node.host + ":" + node.port + " [" + node.state + "]");
+            }
+
+            System.out.println("ZooKeeper cluster demo completed successfully.");
+        } finally {
+            cluster.close();
         }
     }
 

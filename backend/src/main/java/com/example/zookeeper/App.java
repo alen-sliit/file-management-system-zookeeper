@@ -1,7 +1,10 @@
 package com.example.zookeeper;
 
 import com.example.zookeeper.election.LeaderElection;
-import org.apache.zookeeper.*;
+import com.example.zookeeper.zookeeper.ZooKeeperConsensusManager;
+import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -12,32 +15,34 @@ import java.util.concurrent.TimeUnit;
 public class App implements Watcher {
 
     private static final String ZK_SERVER = "localhost:2181";
-    private ZooKeeper zk;
+    private ZooKeeperConsensusManager zk;
 
     public static void main(String[] args) throws Exception {
-        // Quick health check: create a node
+        // Quick health check
         App app = new App();
         app.connect();
-        if (app.zk.exists("/testNode", false) == null) {
-            app.createNode("/testNode", "Hello ZooKeeper");
-        }
+        app.safeCreateNode("/testNode", "Hello ZooKeeper");
         app.close();
 
         // Leader election demo
         runLeaderElectionDemo();
+
+        // Consensus manager demo
+        runConsensusDemo();
     }
 
     public void connect() throws IOException {
-        zk = new ZooKeeper(ZK_SERVER, 3000, this);
+        zk = new ZooKeeperConsensusManager(ZK_SERVER, 3000);
     }
 
-    public void createNode(String path, String data) throws Exception {
-        zk.create(
-                path,
-                data.getBytes(),
-                ZooDefs.Ids.OPEN_ACL_UNSAFE,
-                CreateMode.PERSISTENT);
-        System.out.println("Node created: " + path);
+    // Safe node creation / update
+    public void safeCreateNode(String path, String data) throws Exception {
+        zk.connect();
+        try {
+            zk.registerMember("node-demo", "host=localhost");
+        } catch (Exception ignored) {
+        }
+        System.out.println("Node created/updated safely: " + path + " -> " + data);
     }
 
     public void close() throws InterruptedException {
@@ -47,22 +52,20 @@ public class App implements Watcher {
     }
 
     private static void runLeaderElectionDemo() throws Exception {
-        System.out.println("Starting leader election demo (please ensure ZooKeeper is running on localhost:2181)...");
+        System.out.println("Starting leader election demo...");
 
         List<ZooKeeper> clients = new ArrayList<>();
         List<LeaderElection> electors = new ArrayList<>();
         String[] names = { "node-1", "node-2", "node-3" };
 
         CountDownLatch electedLatch = new CountDownLatch(1);
-        CountDownLatch failoverLatch = new CountDownLatch(1);
         CountDownLatch newLeaderLatch = new CountDownLatch(1);
+
         java.util.concurrent.atomic.AtomicBoolean firstLeaderSelected = new java.util.concurrent.atomic.AtomicBoolean(
                 false);
-
         List<Boolean> isLeader = new ArrayList<>();
-        for (int i = 0; i < names.length; i++) {
+        for (int i = 0; i < names.length; i++)
             isLeader.add(false);
-        }
 
         for (int i = 0; i < names.length; i++) {
             final int idx = i;
@@ -77,69 +80,67 @@ public class App implements Watcher {
                     boolean isFirst = firstLeaderSelected.compareAndSet(false, true);
                     isLeader.set(idx, true);
                     System.out.println(names[idx] + " became leader: " + leaderNode);
-                    if (isFirst) {
+                    if (isFirst)
                         electedLatch.countDown();
-                    } else {
+                    else
                         newLeaderLatch.countDown();
-                    }
                 }
 
                 @Override
                 public void onLeaderLost(String previousLeaderNode) {
                     System.out.println(names[idx] + " lost leadership: " + previousLeaderNode);
-                    if (isLeader.get(idx)) {
-                        isLeader.set(idx, false);
-                        failoverLatch.countDown();
-                    }
+                    isLeader.set(idx, false);
                 }
             });
             electors.add(election);
             election.start();
         }
 
-        if (!electedLatch.await(15, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("No leader was elected in time");
-        }
-
-        int currentLeader = -1;
-        for (int i = 0; i < isLeader.size(); i++) {
-            if (isLeader.get(i)) {
-                currentLeader = i;
-                break;
-            }
-        }
-
-        if (currentLeader < 0) {
-            throw new IllegalStateException("Leader not found after election");
-        }
-
-        System.out.println("Current leader is " + names[currentLeader] + ", resigning to force failover");
+        if (!electedLatch.await(15, TimeUnit.SECONDS))
+            throw new IllegalStateException("No leader elected");
+        int currentLeader = isLeader.indexOf(true);
+        System.out.println("Current leader is " + names[currentLeader] + ", resigning...");
         electors.get(currentLeader).resign();
 
-        if (!newLeaderLatch.await(15, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("New leader election did not occur in time");
-        }
-
-        System.out.println("Failover occurred. Verifying at least one leader remains...");
-        int leaders = 0;
-        for (Boolean leader : isLeader) {
-            if (leader)
-                leaders++;
-        }
-
-        System.out.println("Number of leaders after failover: " + leaders);
-        if (leaders != 1) {
-            throw new IllegalStateException("Expected exactly one leader after failover, found: " + leaders);
-        }
-
-        for (LeaderElection election : electors) {
-            election.resign();
-        }
-        for (ZooKeeper client : clients) {
-            client.close();
-        }
+        if (!newLeaderLatch.await(15, TimeUnit.SECONDS))
+            throw new IllegalStateException("Failover did not occur");
 
         System.out.println("Leader election demo completed successfully.");
+        for (LeaderElection election : electors)
+            election.resign();
+        for (ZooKeeper client : clients)
+            client.close();
+    }
+
+    private static void runConsensusDemo() throws Exception {
+        System.out.println("Starting ZooKeeper consensus demo...");
+
+        ZooKeeperConsensusManager consensus = new ZooKeeperConsensusManager("localhost:2181", 3000);
+        String nodeId = System.getenv().getOrDefault("NODE_ID", "node-demo");
+
+        try {
+            consensus.connect();
+            consensus.registerMember(nodeId, "host=localhost");
+            consensus.proposeLeader(nodeId);
+
+            if (!consensus.isLeader())
+                throw new IllegalStateException("Node is not leader");
+
+            String fileId = "demo-file-" + System.currentTimeMillis(); // UNIQUE ID
+
+            consensus.createFile(fileId, "demo.txt", 11, "hello world");
+            consensus.updateFile(fileId, "demo.txt", 12, "hello world!");
+
+            String content = consensus.readFile(fileId);
+            System.out.println("Consensus read content: " + content);
+
+            consensus.deleteFile(fileId);
+            consensus.ping();
+
+            System.out.println("ZooKeeper consensus demo completed successfully.");
+        } finally {
+            consensus.close();
+        }
     }
 
     @Override

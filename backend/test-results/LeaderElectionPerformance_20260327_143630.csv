@@ -1,0 +1,7 @@
+Scenario,Duration(ms),Success,Details,Timestamp
+Election with 1 servers,45,true,Leader elected: server-1 in 45ms,1774602206089
+Election with 3 servers,91,true,Leader elected: server-1 in 91ms,1774602208214
+Election with 5 servers,2048,true,Leader elected: server-2 in 2048ms,1774602212326
+Election with 7 servers,2104,true,Leader elected: server-3 in 2104ms,1774602216563
+Election with 10 servers,2042,true,Leader elected: server-1 in 2042ms,1774602220751
+Concurrent election (avg over 10 runs),15634,true,Min: 34 ms; Max: 30014 ms; Avg: 15634.10 ms,1774602390223

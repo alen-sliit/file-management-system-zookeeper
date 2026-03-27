@@ -1,0 +1,4 @@
+Scenario,Duration(ms),Success,Details,Timestamp
+Leader failover,593,true,Failed leader: failover-server-1; failover in 593ms,1774602603890
+Network partition (follower isolated),59,true,Isolated: partition-server-2; Leader still: partition-server-1,1774602611180
+Multiple leader failures (3 failures),1406,true,Average failover time: 1406.6666666666667ms,1774602634841

@@ -1,0 +1,3 @@
+Scenario,Duration(ms),Success,Details,Timestamp
+Leader failover,599,true,Failed leader: failover-server-1; failover in 599ms,1774602185068
+Network partition (follower isolated),63,true,Isolated: partition-server-2; Leader still: partition-server-1,1774602192385

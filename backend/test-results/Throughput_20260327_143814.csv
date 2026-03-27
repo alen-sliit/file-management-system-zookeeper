@@ -1,0 +1,19 @@
+Scenario,Duration(ms),Success,Details,Timestamp
+Metadata write throughput with 1 threads,682,true,Ops: 100; Success: 100; Throughput: 146.63 ops/sec,1774602391124
+Metadata write throughput with 5 threads,973,true,Ops: 500; Success: 500; Throughput: 513.87 ops/sec,1774602392753
+Metadata write throughput with 10 threads,1031,true,Ops: 1000; Success: 1000; Throughput: 969.93 ops/sec,1774602396840
+Metadata write throughput with 20 threads,973,true,Ops: 2000; Success: 2000; Throughput: 2055.50 ops/sec,1774602403978
+Metadata write throughput with 50 threads,1462,true,Ops: 5000; Success: 5000; Throughput: 3419.97 ops/sec,1774602417874
+Metadata read throughput with 1 threads,94,true,Ops: 100; Success: 100; Throughput: 1063.83 ops/sec,1774602455350
+Metadata read throughput with 5 threads,87,true,Ops: 500; Success: 500; Throughput: 5747.13 ops/sec,1774602455437
+Metadata read throughput with 10 threads,119,true,Ops: 1000; Success: 1000; Throughput: 8403.36 ops/sec,1774602455557
+Metadata read throughput with 20 threads,252,true,Ops: 2000; Success: 2000; Throughput: 7936.51 ops/sec,1774602455809
+Metadata read throughput with 50 threads,668,true,Ops: 5000; Success: 5000; Throughput: 7485.03 ops/sec,1774602456480
+Operation latency (create),5,true,Avg: 5845 μs; Max: 7062 μs,1774602463624
+Operation latency (read),0,true,Avg: 961 μs; Max: 1403 μs,1774602463624
+Operation latency (delete),5,true,Avg: 5758 μs; Max: 7562 μs,1774602463624
+Concurrent create throughput with 1 threads,287,true,Ops: 50; Success: 50; Throughput: 174.22 ops/sec,1774602463914
+Concurrent create throughput with 5 threads,468,true,Ops: 250; Success: 250; Throughput: 534.19 ops/sec,1774602464644
+Concurrent create throughput with 10 threads,487,true,Ops: 500; Success: 500; Throughput: 1026.69 ops/sec,1774602466622
+Concurrent create throughput with 20 threads,471,true,Ops: 1000; Success: 1000; Throughput: 2123.14 ops/sec,1774602470160
+Concurrent create throughput with 50 threads,1339,true,Ops: 2500; Success: 2500; Throughput: 1867.06 ops/sec,1774602478115

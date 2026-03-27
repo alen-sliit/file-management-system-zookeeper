@@ -2,6 +2,7 @@ package com.example.zookeeper.server;
 
 
 import com.example.zookeeper.config.ServerConfig;
+import com.example.zookeeper.election.ConsensusMonitor;
 import com.example.zookeeper.election.LeaderElection;
 import com.example.zookeeper.zookeeper.ZookeeperConnection;
 
@@ -19,6 +20,7 @@ public class StorageNode {
     private ZookeeperConnection zkConnection;
     private ZooKeeper zooKeeper;
     private LeaderElection leaderElection;
+    private ConsensusMonitor monitor;
     private boolean running = true;
     
     public StorageNode(ServerConfig config) {
@@ -45,6 +47,9 @@ public class StorageNode {
         // Initialize leader election
         leaderElection = new LeaderElection(zooKeeper, config.getServerId());
         leaderElection.initialize();
+
+        // Initialize consensus monitor
+        monitor = new ConsensusMonitor(zooKeeper, config.getServerId());
         
         // Print initial status
         printStatus();
@@ -79,6 +84,12 @@ public class StorageNode {
             System.err.println("Error getting status: " + e.getMessage());
         }
     }
+
+    public void printHealthReport() {
+        if (monitor != null) {
+            System.out.println(monitor.getHealthReport());
+        }
+    }
     
     /**
      * Run interactive console for testing.
@@ -89,6 +100,7 @@ public class StorageNode {
             System.out.println("  status   - Show current status");
             System.out.println("  leader   - Check if I am leader");
             System.out.println("  servers  - List all active servers");
+            System.out.println("  health   - Show consensus health report");
             System.out.println("  quit     - Shutdown this node");
             System.out.println();
             
@@ -113,6 +125,10 @@ public class StorageNode {
                             
                         case "servers":
                             System.out.println("Active servers: " + leaderElection.getActiveServers());
+                            break;
+
+                        case "health":
+                            printHealthReport();
                             break;
                             
                         case "quit":

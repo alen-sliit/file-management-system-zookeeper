@@ -15,7 +15,7 @@ public class ServerConfig {
         this.serverId = serverId;
         this.zookeeperAddress = zookeeperAddress;
         this.storagePort = storagePort;
-        this.storagePath = "./storage/" + serverId;
+        this.storagePath = "./storage";
     }
     
     // Getters

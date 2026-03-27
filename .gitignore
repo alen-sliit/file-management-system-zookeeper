@@ -15,3 +15,13 @@ buildNumber.properties
 .project
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
+
+# ZooKeeper generated/runtime artifacts
+zookeeper-cluster/apache-zookeeper-server-*/data/
+zookeeper-cluster/apache-zookeeper-server-*/logs/
+zookeeper-cluster/apache-zookeeper-server-*/docs/
+zookeeper-cluster/apache-zookeeper-server-*/lib/
+zookeeper-cluster/apache-zookeeper-server-*/zookeeper-*.jar
+zookeeper-cluster/apache-zookeeper-server-*/zookeeper-*.jar.asc
+zookeeper-cluster/apache-zookeeper-server-*/zookeeper-*.jar.md5
+zookeeper-cluster/apache-zookeeper-server-*/zookeeper-*.jar.sha1

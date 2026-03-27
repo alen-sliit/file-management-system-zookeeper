@@ -1,6 +1,7 @@
 package com.example.zookeeper;
 
 import com.example.zookeeper.cluster.ClusterMembershipManager;
+import com.example.zookeeper.config.ConsensusConfiguration;
 import com.example.zookeeper.election.LeaderElection;
 import com.example.zookeeper.zookeeper.ZooKeeperConsensusManager;
 import org.apache.zookeeper.ZooKeeper;
@@ -15,10 +16,13 @@ import java.util.concurrent.TimeUnit;
 
 public class App implements Watcher {
 
-    private static final String ZK_SERVER = "localhost:2181";
+    private static final ConsensusConfiguration CONFIG = ConsensusConfiguration.load();
+    private static final String ZK_SERVER = CONFIG.getZooKeeperConnectString();
     private ZooKeeperConsensusManager zk;
 
     public static void main(String[] args) throws Exception {
+        System.out.println("Loaded consensus configuration: " + CONFIG);
+
         // Quick health check
         App app = new App();
         app.connect();
@@ -36,14 +40,14 @@ public class App implements Watcher {
     }
 
     public void connect() throws IOException {
-        zk = new ZooKeeperConsensusManager(ZK_SERVER, 3000);
+        zk = new ZooKeeperConsensusManager(ZK_SERVER, CONFIG.getSessionTimeoutMs());
     }
 
     // Safe node creation / update
     public void safeCreateNode(String path, String data) throws Exception {
         zk.connect();
         try {
-            zk.registerMember("node-demo", "host=localhost");
+            zk.registerMember(CONFIG.getNodeId(), buildMemberMetadata());
         } catch (Exception ignored) {
         }
         System.out.println("Node created/updated safely: " + path + " -> " + data);
@@ -60,7 +64,7 @@ public class App implements Watcher {
 
         List<ZooKeeper> clients = new ArrayList<>();
         List<LeaderElection> electors = new ArrayList<>();
-        String[] names = { "node-1", "node-2", "node-3" };
+        String[] names = buildElectionNodeNames(CONFIG.getExpectedClusterSize());
 
         CountDownLatch electedLatch = new CountDownLatch(1);
         CountDownLatch newLeaderLatch = new CountDownLatch(1);
@@ -73,7 +77,7 @@ public class App implements Watcher {
 
         for (int i = 0; i < names.length; i++) {
             final int idx = i;
-            ZooKeeper client = new ZooKeeper(ZK_SERVER, 3000, event -> {
+            ZooKeeper client = new ZooKeeper(ZK_SERVER, CONFIG.getSessionTimeoutMs(), event -> {
                 // no-op for demo
             });
             clients.add(client);
@@ -119,12 +123,14 @@ public class App implements Watcher {
     private static void runConsensusDemo() throws Exception {
         System.out.println("Starting ZooKeeper consensus demo...");
 
-        ZooKeeperConsensusManager consensus = new ZooKeeperConsensusManager("localhost:2181", 3000);
-        String nodeId = System.getenv().getOrDefault("NODE_ID", "node-demo");
+        ZooKeeperConsensusManager consensus = new ZooKeeperConsensusManager(
+                CONFIG.getZooKeeperConnectString(),
+                CONFIG.getSessionTimeoutMs());
+        String nodeId = CONFIG.getNodeId();
 
         try {
             consensus.connect();
-            consensus.registerMember(nodeId, "host=localhost");
+            consensus.registerMember(nodeId, buildMemberMetadata());
             consensus.proposeLeader(nodeId);
 
             if (!consensus.isLeader())
@@ -150,13 +156,18 @@ public class App implements Watcher {
     private static void runClusterDemo() throws Exception {
         System.out.println("Starting ZooKeeper cluster demo...");
 
-        ClusterMembershipManager cluster = new ClusterMembershipManager(ZK_SERVER, 3000);
-        String nodeId = System.getenv().getOrDefault("NODE_ID", "node-demo");
+        ClusterMembershipManager cluster = new ClusterMembershipManager(
+                CONFIG.getZooKeeperConnectString(),
+                CONFIG.getSessionTimeoutMs());
+        String nodeId = CONFIG.getNodeId();
 
         try {
             cluster.connect();
-            String registeredPath = cluster.registerNode(nodeId, "localhost", 8080, "ACTIVE");
+            String registeredPath = cluster.registerNode(nodeId, CONFIG.getNodeHost(), CONFIG.getNodePort(), "ACTIVE");
             System.out.println("Cluster node registered at: " + registeredPath);
+
+            System.out.println("Replication factor: " + CONFIG.getReplicationFactor());
+            System.out.println("Expected cluster size: " + CONFIG.getExpectedClusterSize());
 
             cluster.markNodeState(nodeId, "HEALTHY");
             String leader = cluster.getLeader();
@@ -177,5 +188,18 @@ public class App implements Watcher {
     @Override
     public void process(WatchedEvent event) {
         System.out.println("Event received: " + event);
+    }
+
+    private static String buildMemberMetadata() {
+        return "host=" + CONFIG.getNodeHost() + ";port=" + CONFIG.getNodePort();
+    }
+
+    private static String[] buildElectionNodeNames(int count) {
+        int safeCount = Math.max(3, count);
+        String[] names = new String[safeCount];
+        for (int index = 0; index < safeCount; index++) {
+            names[index] = "node-" + (index + 1);
+        }
+        return names;
     }
 }

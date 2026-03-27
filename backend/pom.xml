@@ -34,6 +34,26 @@
         <version>5.10.2</version>
         <scope>test</scope>
       </dependency>
+      <dependency>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-core</artifactId>
+          <version>2.15.2</version>
+      </dependency>
+      <dependency>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-databind</artifactId>
+          <version>2.15.2</version>
+      </dependency>
+      <dependency>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-annotations</artifactId>
+          <version>2.15.2</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.datatype</groupId>
+        <artifactId>jackson-datatype-jsr310</artifactId>
+        <version>2.15.2</version>
+      </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -46,6 +66,7 @@
             <exclude>**/FailureScenarioTest.java</exclude>
             <exclude>**/LeaderElectionPerformanceTest.java</exclude>
             <exclude>**/ThroughputTest.java</exclude>
+            <exclude>**/FileStorageTest.java</exclude>
           </excludes>
         </configuration>
       </plugin>

@@ -127,3 +127,6 @@ file-management-system-zookeeper/
   frontend/
   README.md
 ```
+
+run commands 
+$ mvn exec:java -Dexec.args="server-1 localhost:2181 8081"

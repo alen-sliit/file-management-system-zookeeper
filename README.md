@@ -127,3 +127,29 @@ file-management-system-zookeeper/
   frontend/
   README.md
 ```
+
+## 11) Run Commands (5 Storage Servers + 1 Web Server)
+
+Run these from the `backend` folder.
+
+Quick start (starts all 5 storage servers + web server):
+
+```bash
+bash start.sh
+```
+
+Start each storage server in a separate terminal:
+
+```bash
+mvn exec:java -Dexec.args="server-1 localhost:2181 8081"
+mvn exec:java -Dexec.args="server-2 localhost:2181 8082"
+mvn exec:java -Dexec.args="server-3 localhost:2181 8083"
+mvn exec:java -Dexec.args="server-4 localhost:2181 8084"
+mvn exec:java -Dexec.args="server-5 localhost:2181 8085"
+```
+
+Start web server (separate terminal):
+
+```bash
+mvn -f pom.xml exec:java -Dexec.mainClass=com.example.zookeeper.client.WebClientServer -Dexec.args="localhost:2181 8080"
+```

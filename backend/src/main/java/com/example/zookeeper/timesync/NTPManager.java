@@ -14,8 +14,18 @@ import java.util.Properties;
 /**
  * Queries NTP and tracks offset/skew. ZooKeeper still orders operations via zxid;
  * corrected wall clock is used for metadata timestamps and logging.
+ * <p>
+ * Severity bands are tuned for typical NTP: millisecond-class offsets are normal; only much larger
+ * drift is treated as ERROR/CRITICAL or rejected for writes (see {@link #CONFIG_RESOURCE}).
+ * </p>
  */
 public class NTPManager {
+
+    /**
+     * Package-unique resource path so the shaded uber-JAR does not accidentally load another
+     * artifact's {@code time_sync_config.properties} from the default (root) classpath.
+     */
+    public static final String CONFIG_RESOURCE = "com/example/zookeeper/timesync/time_sync_config.properties";
 
     public enum ClockSkewSeverity {
         OK(0),
@@ -30,38 +40,72 @@ public class NTPManager {
         }
     }
 
+    private static final class SkewThresholds {
+        final long warnMs;
+        final long errorMs;
+        final long criticalMs;
+        final long writeRejectMs;
+
+        SkewThresholds(long warnMs, long errorMs, long criticalMs, long writeRejectMs) {
+            this.warnMs = warnMs;
+            this.errorMs = errorMs;
+            this.criticalMs = criticalMs;
+            this.writeRejectMs = writeRejectMs;
+        }
+    }
+
     private final String ntpServer;
     private long offsetMillis;
     private volatile boolean lastSyncSuccessful;
     private volatile long maxAbsOffsetMs;
 
-    private final long warnThresholdMs;
-    private final long severeThresholdMs;
+    private final SkewThresholds thresholds;
 
     public NTPManager(String ntpServer) {
         this(ntpServer, loadThresholdsFromClasspath());
     }
 
-    private NTPManager(String ntpServer, long[] thresholds) {
+    private NTPManager(String ntpServer, SkewThresholds thresholds) {
         this.ntpServer = ntpServer;
         this.offsetMillis = 0;
-        this.warnThresholdMs = thresholds[0];
-        this.severeThresholdMs = thresholds[1];
+        this.thresholds = thresholds;
     }
 
-    private static long[] loadThresholdsFromClasspath() {
+    private static SkewThresholds loadThresholdsFromClasspath() {
         Properties p = new Properties();
         try (InputStream in = NTPManager.class.getClassLoader()
-                .getResourceAsStream("time_sync_config.properties")) {
+                .getResourceAsStream(CONFIG_RESOURCE)) {
             if (in != null) {
                 p.load(in);
             }
         } catch (IOException ignored) {
             // defaults below
         }
-        long warn = parseLong(p.getProperty("drift.threshold.ms"), 50L);
-        long severe = parseLong(p.getProperty("skew.severe.threshold.ms"), 100L);
-        return new long[] { warn, severe };
+        // WARN: log when drift is noticeable (typical NTP is often under 100 ms).
+        long warn = parseLong(p.getProperty("drift.threshold.ms"), 100L);
+        // ERROR: only clearly broken sync (seconds+); keeps typical NTP jitter at WARN.
+        long error = parseLong(p.getProperty("skew.error.threshold.ms"), 10_000L);
+        // CRITICAL: extreme skew only.
+        long critical = parseLong(p.getProperty("skew.critical.threshold.ms"), 60_000L);
+        // Reject writes only when offset is far worse than typical NTP variance.
+        long writeReject = parseLong(p.getProperty("skew.write.reject.threshold.ms"), 30_000L);
+        // Backward compat: old key used one bucket for both ERROR labelling and write reject.
+        if (p.containsKey("skew.severe.threshold.ms") && !p.containsKey("skew.write.reject.threshold.ms")) {
+            long legacy = parseLong(p.getProperty("skew.severe.threshold.ms"), 100L);
+            if (legacy < writeReject) {
+                writeReject = Math.max(legacy, 500L);
+            }
+        }
+        if (warn >= error) {
+            error = warn + 1;
+        }
+        if (error >= critical) {
+            critical = error + 1;
+        }
+        if (writeReject < error) {
+            writeReject = error;
+        }
+        return new SkewThresholds(warn, error, critical, writeReject);
     }
 
     private static long parseLong(String s, long def) {
@@ -79,7 +123,7 @@ public class NTPManager {
     public static NTPManager fromClasspathDefaults() {
         Properties p = new Properties();
         try (InputStream in = NTPManager.class.getClassLoader()
-                .getResourceAsStream("time_sync_config.properties")) {
+                .getResourceAsStream(CONFIG_RESOURCE)) {
             if (in != null) {
                 p.load(in);
             }
@@ -130,20 +174,46 @@ public class NTPManager {
 
     public ClockSkewSeverity getSeverity() {
         long abs = Math.abs(offsetMillis);
-        if (abs >= severeThresholdMs * 5 || abs >= 500) {
+        if (abs >= thresholds.criticalMs) {
             return ClockSkewSeverity.CRITICAL;
         }
-        if (abs >= severeThresholdMs) {
+        if (abs >= thresholds.errorMs) {
             return ClockSkewSeverity.ERROR;
         }
-        if (abs >= warnThresholdMs) {
+        if (abs >= thresholds.warnMs) {
             return ClockSkewSeverity.WARN;
         }
         return ClockSkewSeverity.OK;
     }
 
+    /**
+     * Whether the measured offset is acceptable for coordinating writes from a clock perspective.
+     * Uses {@code skew.write.reject.threshold.ms}: normal NTP variance (often tens to low hundreds of ms)
+     * does not fail this check; only clearly broken sync does.
+     */
     public boolean isClockSkewAcceptable() {
-        return Math.abs(offsetMillis) < severeThresholdMs;
+        return Math.abs(offsetMillis) < thresholds.writeRejectMs;
+    }
+
+    /** True if {@code absOffsetMillis} would be logged as a severe skew alert (same band as ERROR+). */
+    public boolean exceedsSevereAlertThreshold(long absOffsetMillis) {
+        return absOffsetMillis >= thresholds.errorMs;
+    }
+
+    public long getWarnThresholdMs() {
+        return thresholds.warnMs;
+    }
+
+    public long getErrorThresholdMs() {
+        return thresholds.errorMs;
+    }
+
+    public long getCriticalThresholdMs() {
+        return thresholds.criticalMs;
+    }
+
+    public long getWriteRejectThresholdMs() {
+        return thresholds.writeRejectMs;
     }
 
     public Map<String, Object> getPeerClockInfo() {
@@ -153,8 +223,10 @@ public class NTPManager {
         m.put("lastSyncSuccessful", lastSyncSuccessful);
         m.put("maxAbsOffsetMs", maxAbsOffsetMs);
         m.put("severity", getSeverity().name());
-        m.put("warnThresholdMs", warnThresholdMs);
-        m.put("severeThresholdMs", severeThresholdMs);
+        m.put("warnThresholdMs", thresholds.warnMs);
+        m.put("errorThresholdMs", thresholds.errorMs);
+        m.put("criticalThresholdMs", thresholds.criticalMs);
+        m.put("writeRejectThresholdMs", thresholds.writeRejectMs);
         return m;
     }
 }

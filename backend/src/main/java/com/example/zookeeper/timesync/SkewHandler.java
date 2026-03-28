@@ -179,6 +179,11 @@ public class SkewHandler {
         sb.append(String.format("Clock Offset: %d ms\n", getClockOffsetMillis()));
         sb.append(String.format("Max Skew Detected: %d ms\n", getMaxClockSkewMs()));
         sb.append(String.format("Skew Severity: %s\n", getSkewSeverity()));
+        sb.append(String.format("Severity bands (|offset| ms): WARN >= %d, ERROR >= %d, CRITICAL >= %d\n",
+                skewMonitor.getWarnThresholdMs(),
+                skewMonitor.getErrorThresholdMs(),
+                skewMonitor.getCriticalThresholdMs()));
+        sb.append(String.format("Write reject if |offset| >= %d ms\n", skewMonitor.getWriteRejectThresholdMs()));
         sb.append(String.format("Skew Acceptable: %s\n", isClockSkewAcceptable()));
         sb.append(String.format("Current Time: %s\n", getCurrentTimeInstant()));
         sb.append(String.format("Can Write: %s\n", canPerformWriteOperation()));
@@ -204,20 +209,10 @@ public class SkewHandler {
         return running;
     }
 
-    /** Optional: alert on very large measured offset (e.g. admin / metrics hook). */
+    /** Optional: alert on very large measured offset (e.g. admin / metrics hook). Uses ERROR band from {@link NTPManager}. */
     public void handleSkew(long offsetMillis) {
-        long severe = 100L;
-        try (java.io.InputStream in = SkewHandler.class.getClassLoader()
-                .getResourceAsStream("time_sync_config.properties")) {
-            if (in != null) {
-                java.util.Properties p = new java.util.Properties();
-                p.load(in);
-                severe = Long.parseLong(p.getProperty("skew.severe.threshold.ms", "100").trim());
-            }
-        } catch (Exception ignored) {
-        }
-        if (Math.abs(offsetMillis) > severe) {
-            logger.error("[TimeSync] Severe clock skew detected: {} ms", offsetMillis);
+        if (skewMonitor.exceedsSevereAlertThreshold(Math.abs(offsetMillis))) {
+            logger.error("[TimeSync] Severe clock skew detected: {} ms (see skew.error.threshold.ms)", offsetMillis);
         }
     }
 }

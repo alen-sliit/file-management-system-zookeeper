@@ -1,5 +1,7 @@
 package com.example.zookeeper.timesync;
 
+import java.net.URL;
+
 /**
  * Entry point for running the time-sync demo from a packaged JAR.
  *
@@ -11,6 +13,10 @@ public final class TimeSyncService {
     }
 
     public static void main(String[] args) throws InterruptedException {
+        URL cfg = TimeSyncService.class.getClassLoader().getResource(NTPManager.CONFIG_RESOURCE);
+        System.out.println("[TimeSync] config: " + NTPManager.CONFIG_RESOURCE
+                + " -> " + (cfg != null ? cfg : "MISSING (built-in defaults)"));
+
         String serverId = args.length > 0 ? args[0] : "standalone";
         long pollSec = 5;
         if (args.length > 1) {
@@ -25,6 +31,7 @@ public final class TimeSyncService {
         timeSync.start();
         Thread.sleep(1500);
         System.out.println("Corrected time: " + timeSync.getCurrentTimeInstant());
+        System.out.println("[TimeSync] measured |offset| = " + Math.abs(timeSync.getClockOffsetMillis()) + " ms");
         timeSync.handleSkew(timeSync.getClockOffsetMillis());
         System.out.println(timeSync.getHealthReport());
         timeSync.stop();

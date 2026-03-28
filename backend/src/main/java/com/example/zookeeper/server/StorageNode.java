@@ -6,7 +6,7 @@ import com.example.zookeeper.election.ConsensusMonitor;
 import com.example.zookeeper.election.LeaderElection;
 import com.example.zookeeper.storage.FileMetadata;
 import com.example.zookeeper.storage.FileStorageManager;
-import com.example.zookeeper.timesync.TimeSyncService;
+import com.example.zookeeper.timesync.SkewHandler;
 import com.example.zookeeper.zookeeper.ZookeeperConnection;
 
 import org.apache.zookeeper.Watcher;
@@ -39,7 +39,7 @@ public class StorageNode {
     private LeaderElection leaderElection;
     private ConsensusMonitor monitor;
     private FileStorageManager storageManager;
-    private TimeSyncService timeSyncService;
+    private SkewHandler timeSyncService;
     private boolean isLeader = false;
     private final String storagePath;
     private final Set<String> knownServers = new HashSet<>();
@@ -76,7 +76,7 @@ public class StorageNode {
 
         // Initialize time synchronization service (Member 3 implementation)
         try {
-            timeSyncService = new TimeSyncService(config.getServerId(), zooKeeper, 300, 30);
+            timeSyncService = new SkewHandler(config.getServerId(), zooKeeper, 300, 30);
             timeSyncService.start();
             logger.info("TimeSyncService started for server {}", config.getServerId());
         } catch (Exception e) {

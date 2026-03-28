@@ -18,8 +18,9 @@ public class FileMetadata {
     private String fileId;           // Unique identifier for the file
     private String filename;         // Original filename
     private long size;               // File size in bytes
-    private Instant createdAt;       // Creation timestamp
-    private Instant modifiedAt;      // Last modification timestamp
+    /** Wall-clock fields for display and auditing; revision order uses ZooKeeper mzxid, not these times. */
+    private Instant createdAt;
+    private Instant modifiedAt;
     private String owner;            // Server ID that owns the file
     private int version;             // Version number for conflict detection
     private List<String> locations;  // Server IDs where file is stored

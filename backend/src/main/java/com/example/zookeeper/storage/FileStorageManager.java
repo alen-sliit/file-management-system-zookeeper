@@ -4,7 +4,8 @@ import org.apache.zookeeper.*;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.example.zookeeper.timesync.TimeSyncService;
+import com.example.zookeeper.timesync.SkewHandler;
+import com.example.zookeeper.timesync.ZxidOrdering;
 
 import java.io.*;
 import java.nio.file.*;
@@ -31,14 +32,14 @@ public class FileStorageManager {
     private final Path storageDirectory;
     private final Map<String, ReentrantReadWriteLock> fileLocks;
     private final Map<String, FileMetadata> metadataCache;
-    private volatile TimeSyncService timeSyncService; // Optional time synchronization service
+    private volatile SkewHandler timeSyncService; // Optional time synchronization service
     
     public FileStorageManager(ZooKeeper zooKeeper, String serverId, String storagePath) throws IOException {
         this(zooKeeper, serverId, storagePath, null);
     }
     
     public FileStorageManager(ZooKeeper zooKeeper, String serverId, String storagePath, 
-                             TimeSyncService timeSyncService) throws IOException {
+                             SkewHandler timeSyncService) throws IOException {
         this.zooKeeper = zooKeeper;
         this.serverId = serverId;
         this.timeSyncService = timeSyncService;
@@ -580,24 +581,14 @@ public class FileStorageManager {
                 continue;
             }
 
-            if (latest == null || isNewer(metadata, latest.metadata)) {
+            if (latest == null || ZxidOrdering.isMetadataRevisionNewer(
+                    stat, metadata.getVersion(),
+                    latest.stat, latest.metadata.getVersion())) {
                 latest = new MetadataNode(nodeId, stat, metadata);
             }
         }
 
         return latest;
-    }
-
-    private boolean isNewer(FileMetadata candidate, FileMetadata current) {
-        Instant candidateTime = candidate.getModifiedAt() != null ? candidate.getModifiedAt() : candidate.getCreatedAt();
-        Instant currentTime = current.getModifiedAt() != null ? current.getModifiedAt() : current.getCreatedAt();
-        if (candidateTime == null) {
-            return false;
-        }
-        if (currentTime == null) {
-            return true;
-        }
-        return candidateTime.isAfter(currentTime);
     }
 
     private static class MetadataNode {
@@ -644,7 +635,7 @@ public class FileStorageManager {
     /**
      * Set TimeSyncService for synchronized timestamps
      */
-    public void setTimeSyncService(TimeSyncService timeSyncService) {
+    public void setTimeSyncService(SkewHandler timeSyncService) {
         this.timeSyncService = timeSyncService;
         logger.info("TimeSyncService set for FileStorageManager on server {}", serverId);
     }
@@ -652,7 +643,7 @@ public class FileStorageManager {
     /**
      * Get TimeSyncService
      */
-    public TimeSyncService getTimeSyncService() {
+    public SkewHandler getTimeSyncService() {
         return timeSyncService;
     }
     
